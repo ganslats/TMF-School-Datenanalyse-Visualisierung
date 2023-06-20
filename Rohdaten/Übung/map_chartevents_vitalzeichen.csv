@@ -11,6 +11,5 @@ BP;Blood pressure;225309;ART BP Systolic;8480-6;Systolic blood pressure;76215-3;
 BP;Blood pressure;225310;ART BP Diastolic;8462-4;Diastolic blood pressure;76213-8;Invasive Diastolic blood pressure;mmHg
 HR;Heart rate;211;Heart Rate;8867-4;Heart rate;8867-4;Heart rate;bpm
 HR;Heart rate;220045;Heart Rate;8867-4;Heart rate;8867-4;Heart rate;bpm
-HR;Heart rate;220045;HR;8867-4;Heart rate;8867-4;Heart rate;bpm
 Temp;Temperature;677;Temperature C (calc);8310-5;Body temperature;8310-5;Body temperature;°C
 Temp;Temperature;676;Temperature C;8310-5;Body temperature;8310-5;Body temperature;°C
