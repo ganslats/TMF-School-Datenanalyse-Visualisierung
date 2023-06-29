@@ -1,0 +1,78 @@
+---
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/teil-5-demo-01-aufwerten-terminologien.ipynb"
+output: html_document
+---
+
+# Teil 5 Demo 1: Aufwertung von Daten mit Terminologien
+
+## Bibliotheken & Konfiguration
+
+```{r}
+packages <- c("readr", "dplyr", "stringr", "tidyr", "icd.data")
+install.packages(setdiff(packages, rownames(installed.packages())))
+lapply(packages, require, character.only = TRUE)
+
+base_url <- "https://raw.githubusercontent.com/ganslats/TMF-School-Datenanalyse-Visualisierung/master/Rohdaten/mimic-iii-demo/"
+```
+
+## Ausgewählte MIMIC III-Rohdaten laden
+
+```{r}
+mimic.diagnoses.raw     <- read_csv(paste(base_url, "DIAGNOSES_ICD.csv", sep=""),
+                                    col_types = cols(row_id = col_double(), subject_id = col_double(), hadm_id = col_double(), seq_num = col_double(), icd9_code = col_character()))
+mimic.d_icd.raw         <- read_csv(paste(base_url, "D_ICD_DIAGNOSES.csv", sep=""),
+                                    col_types = cols(row_id = col_double(), icd9_code = col_character(), short_title = col_character(), long_title = col_character()))
+#head(mimic.patients.raw)
+#head(mimic.admissions.raw)
+#head(mimic.diagnoses.raw)
+#head(mimic.d_icd.raw)
+```
+
+## Häufigste Diagnosen ermitteln
+
+```{r}
+head(mimic.diagnoses.raw %>%
+    group_by(icd9_code) %>%
+    summarize(n = n(), .groups = "keep") %>%
+    arrange(desc(n)),
+10)
+```
+
+## Bezeichner aus dem ICD9-Katalog ergänzen
+
+```{r}
+head(mimic.diagnoses.raw %>%
+    inner_join(mimic.d_icd.raw %>% select(icd9_code, short_title), by = "icd9_code") %>%
+    group_by(icd9_code, short_title) %>%
+    summarize(n = n(), .groups = "keep") %>%
+    arrange(desc(n)),
+10)
+```
+
+```{r}
+icd9.hierarchy.raw <- icd9cm_hierarchy
+icd9.hierarchy.raw$icd9_code <- as.character(icd9.hierarchy.raw$code)
+head(icd9.hierarchy.raw)
+```
+
+## ICD9-Hierarchie ergänzen
+
+### ICD9-Hierarchy aus dem R-Paket "icd.data" laden und String-Version des ICD-Codes ergänzen
+
+```{r}
+icd9.hierarchy.raw <- icd9cm_hierarchy
+icd9.hierarchy.raw$icd9_code <- as.character(icd9.hierarchy.raw$code)
+head(icd9.hierarchy.raw)
+```
+
+## Aggregation auf Ebene der Unterkapitel des ICD9-Katalogs
+
+```{r}
+head(mimic.diagnoses.raw %>%
+    inner_join(icd9.hierarchy.raw, by = "icd9_code") %>%
+    group_by(sub_chapter) %>%
+    summarize(n = n(), .groups = "keep") %>%
+    arrange(desc(n)),
+10)
+```
+

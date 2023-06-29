@@ -1,0 +1,33 @@
+---
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/teil-2-demo-02-jupyter.ipynb"
+output: html_document
+---
+
+```{r}
+# Code-Zelle, Kommentare beginnen mit #
+
+# Einfache Berechnungen können direkt eingegeben werden, Ergebnisse erscheinen unterhalb der Zelle
+2+2
+```
+
+## Markdown-Zelle
+
+Der **Text** kann per *Doppelklick* editiert werden
+
+Markdown-*Cheatsheet* mit den wesentlichen Befehlen siehe hier: https://www.markdownguide.org/cheat-sheet/ 
+
+```{r}
+# Variablen können zugewiesen & in Berechnungen verwendet werden
+a <- 3
+b <- 5
+a * b
+```
+
+```{r}
+# R arbeitet vektorbasiert, so dass Operationen in einem Schritt auf alle Elemente eines Vektors angewendet werden können
+# hier: Multiplikation der Zahlen 1, 2 und 3 mit den Zahlen 4, 5 und 6
+a <- c(1, 2, 3)
+b <- c(4, 5, 6)
+a * b
+```
+

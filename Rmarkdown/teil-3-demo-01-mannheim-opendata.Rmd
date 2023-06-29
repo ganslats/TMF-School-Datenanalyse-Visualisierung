@@ -1,0 +1,73 @@
+---
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/teil-3-demo-01-mannheim-opendata.ipynb"
+output: html_document
+---
+
+# Teil 3, Demo 1: Datenabfrage & -visualisierung aus Open Data-Portal Mannheim
+
+## Bibliotheken & Konfiguration
+
+```{r}
+packages <- c("readr", "tidyr", "dplyr", "ggplot2")
+install.packages(setdiff(packages, rownames(installed.packages())))
+lapply(packages, require, character.only = TRUE)
+```
+
+## Bevölkerungsbestand vom Portal einlesen
+
+```{r}
+mannheim.population.raw <- read_delim("https://mannheim.opendatasoft.com/explore/dataset/bevolkerungsbestand-in-mannheim-2009-2022/download/?format=csv&timezone=Europe/Berlin&lang=de&use_labels_for_header=true&csv_separator=%3B",
+                                      col_names =    c("id", "jahr", "stadtteil_id", "stadtteil_name", "n_gesamt", "n_weiblich", "n_ohne_migration", "n_mit_migration", "n_auslaender"),
+                                      col_types = cols("i",  "i",    "c",            "c",              "i",        "i",          "i",                "i",               "i"),
+                                      skip = 1, delim = ";")
+head(mannheim.population.raw)
+```
+
+## Tabelle aus "Querformat" in "Längsformat" kippen
+
+```{r}
+mannheim.population.long <- mannheim.population.raw %>% pivot_longer(!c(id, jahr, stadtteil_id, stadtteil_name), names_to="variable", values_to="n")
+head(mannheim.population.long)
+```
+
+## Visualisierung Gesamtbevölkerung vs. Zeit
+
+```{r}
+options(repr.plot.width = 10, repr.plot.height = 5)
+ggplot(data = mannheim.population.long %>% filter(variable == "n_gesamt") %>% group_by(jahr) %>% summarize(n = sum(n), .groups="keep"), 
+       aes(x=jahr, y=n)) + 
+    geom_bar(stat="identity")
+```
+
+## Visualisierung Migrationsanteil vs. Zeit
+
+```{r}
+options(repr.plot.width = 10, repr.plot.height = 5)
+ggplot(data = mannheim.population.long %>% filter(variable %in% c("n_mit_migration", "n_ohne_migration")) %>% group_by(jahr, variable) %>% summarize(n = sum(n), .groups="keep"), 
+       aes(x=jahr, y=n, fill=variable)) + 
+    geom_bar(stat = "identity",
+             position = "fill")
+```
+
+## Visualisierung Migrationsanteil vs Stadtteil
+
+```{r}
+options(repr.plot.width = 10, repr.plot.height = 5)
+ggplot(data = mannheim.population.long %>% filter(variable %in% c("n_mit_migration", "n_ohne_migration")) %>% group_by(stadtteil_name, variable) %>% summarize(n = sum(n), .groups="keep"), 
+       aes(x=stadtteil_name, y=n, fill=variable)) + 
+    geom_bar(stat = "identity", 
+             position = "fill") +
+    theme(axis.text.x = element_text(angle = 90))
+```
+
+## Visualisierung Migrationsanteil vs. Stadteil & Zeit
+
+```{r}
+ggplot(data = mannheim.population.long %>% filter(variable %in% c("n_mit_migration", "n_ohne_migration")) %>% group_by(jahr, stadtteil_name, variable) %>% summarize(n = sum(n), .groups="keep"), 
+       aes(x=jahr, y=n, fill=variable)) + 
+    geom_bar(stat = "identity", 
+             position = "fill") +
+    theme(axis.text.x = element_text(angle = 90)) +
+    facet_wrap(~stadtteil_name)
+```
+

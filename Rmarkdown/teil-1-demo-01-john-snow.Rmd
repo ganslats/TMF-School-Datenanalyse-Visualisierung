@@ -1,0 +1,105 @@
+---
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/teil-1-demo-01-john-snow.ipynb"
+output: html_document
+---
+
+# Teil 1, Demo 1: Cholera-Daten von John Snow
+
+## Bibliotheken & Konfiguration
+
+```{r}
+packages <- c("leaflet", "ggmap", "readr", "tidyr", "ggplot2")
+install.packages(setdiff(packages, rownames(installed.packages())))
+lapply(packages, require, character.only = TRUE)
+
+base_url <- "https://raw.githubusercontent.com/ganslats/TMF-School-Datenanalyse-Visualisierung/master/Rohdaten/john-snow/"
+```
+
+## Zeitverlauf Infektionen & Todesfälle laden
+
+```{r}
+snow.dates.raw <- read_csv(paste(base_url, "snow.dates.csv", sep=""), 
+                           col_names = c("index", "date", "attacks", "deaths"),
+                           col_types = cols("i", col_date(format = "%Y-%m-%d"), "i", "i"),
+                           skip = 1)
+head(snow.dates.raw)
+```
+
+## Zeitverlauf plotten
+
+```{r}
+snow.dates.long <- snow.dates.raw %>% pivot_longer(!c(index, date), names_to="variable", values_to="n")
+options(repr.plot.width = 10, repr.plot.height = 2.5)
+ggplot(snow.dates.long) +
+    geom_area(aes(x=date, y=n, fill=variable), alpha=0.5, position="identity") 
+```
+
+## Karte von London laden
+
+```{r}
+# bbox <- make_bbox(lon = snow.deaths.raw$lon, lat = snow.deaths.raw$lat, f = 0.25)
+boundingbox <- c(-0.14185925, 51.5108615, -0.13114775, 51.5168285)
+basemap <- get_stamenmap(bbox = boundingbox, center = c(lon = -0.136722, lat = 51.513578), maptype="toner-lite", crop=TRUE, zoom = 16)
+options(repr.plot.width = 10, repr.plot.height = 10)
+ggmap(basemap)
+```
+
+## Koordinaten der Todesfälle laden
+
+```{r}
+snow.deaths.raw <- read_csv(paste(base_url, "cholera_deaths.csv", sep=""), 
+                            col_names=c("index", "deaths", "lon", "lat"), 
+                            col_types = cols("i","i","d","d"), 
+                            skip=1)
+head(snow.deaths.raw)
+```
+
+## Todesfälle auf der Karte anzeigen
+
+```{r}
+map <- ggmap(basemap) + 
+    geom_point(data = snow.deaths.raw, aes(x = lon, y = lat, size=deaths), color="blue", alpha=0.5)
+options(repr.plot.width = 10, repr.plot.height = 10)
+map
+```
+
+## Koordinaten der Wasserpumpen laden
+
+```{r}
+snow.pumps.raw <- read_csv(paste(base_url, "johnsnow_pumps.csv", sep=""), 
+                           col_names=c("index", "lon", "lat"), 
+                           col_types = cols("i","d","d"), 
+                           skip=1)
+head(snow.pumps.raw)
+```
+
+## Wasserpumpen auf der Karte anzeigen
+
+```{r}
+map <- map + 
+    geom_point(data = snow.pumps.raw, aes(x = lon, y = lat, size=5), color="red", alpha=0.75)
+options(repr.plot.width = 10, repr.plot.height = 10)
+map
+```
+
+## Interaktive Karte mit Leaflet
+
+### Hinweis: kann in Google Colab leider nicht angezeigt werden
+
+```{r}
+leafletmap <- leaflet() %>%
+    setView(-0.136722, 51.513578, zoom=16) %>%
+    addProviderTiles(providers$Stamen.TonerLite) %>% 
+    addCircleMarkers(
+        data = snow.deaths.raw, ~lon, ~lat,
+        radius = ~deaths * 2,
+        color = "red",
+        stroke = FALSE, 
+        fillOpacity = 0.5
+    ) %>% 
+    addMarkers(
+        data = snow.pumps.raw, ~lon, ~lat,
+    )
+leafletmap
+```
+
