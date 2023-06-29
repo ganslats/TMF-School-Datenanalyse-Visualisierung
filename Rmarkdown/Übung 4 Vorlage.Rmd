@@ -1,0 +1,205 @@
+---
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/Übung
+  4 Vorlage.ipynb"
+output: html_document
+---
+
+# Übung 4: Exploration von Laborbefunden gegenüber Diagnosen
+
+## Bibliotheken & Konfiguration
+
+```{r}
+packages <- c("readr", "dplyr", "tidyr", "ggplot2", "icd.data", "stringr")
+install.packages(setdiff(packages, rownames(installed.packages())))
+lapply(packages, require, character.only = TRUE)
+
+base_url <- "https://raw.githubusercontent.com/ganslats/TMF-School-Datenanalyse-Visualisierung/master/Rohdaten/"
+```
+
+## Vorbereitende Schritte
+
+#### MIMIC III-Daten laden
+
+Hinweis: das Laden der Daten (vor allem Chartevents-Tabelle) kann etwas dauern
+
+```{r}
+# Patientenstammdaten laden
+mimic.patients.raw <- read_csv(paste(base_url, "mimic-iii-demo/PATIENTS.csv", sep=""),
+                               col_types = cols(row_id = col_integer(), subject_id = col_integer(), gender = col_character(), dob = col_datetime(format = ""), dod = col_datetime(format = ""), dod_hosp = col_datetime(format = ""), dod_ssn = col_datetime(format = ""), expire_flag = col_double()))
+
+# Behandlungsfälle laden
+mimic.admissions.raw <- read_csv(paste(base_url, "mimic-iii-demo/ADMISSIONS.csv", sep=""),
+                                 col_types = cols(  row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), admittime = col_datetime(format = ""), dischtime = col_datetime(format = ""), deathtime = col_datetime(format = ""), admission_type = col_character(), admission_location = col_character(), discharge_location = col_character(), insurance = col_character(), language = col_character(), religion = col_character(), marital_status = col_character(), ethnicity = col_character(), edregtime = col_datetime(format = ""), edouttime = col_datetime(format = ""), diagnosis = col_character(), hospital_expire_flag = col_double(), has_chartevents_data = col_double()))
+
+# Intensivaufenthalte laden
+mimic.icustays.raw <- read_csv(paste(base_url, "mimic-iii-demo/ICUSTAYS.csv", sep=""),
+                               col_types = cols(row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), icustay_id = col_integer(), dbsource = col_character(), first_careunit = col_character(), last_careunit = col_character(), first_wardid = col_double(), last_wardid = col_double(), intime = col_datetime(format = ""), outtime = col_datetime(format = ""), los = col_double()))
+
+# Diagnosen laden
+mimic.diagnoses.raw <- read_csv(paste(base_url, "mimic-iii-demo/DIAGNOSES_ICD.csv", sep=""),
+                                col_types = cols(row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), seq_num = col_integer(), icd9_code = col_character()))
+
+# Diagnosebezeichner laden
+mimic.d_icd_diagnoses.raw <- read_csv(paste(base_url, "mimic-iii-demo/D_ICD_DIAGNOSES.csv", sep=""),
+                                      col_types = cols(row_id = col_integer(), icd9_code = col_character(), short_title = col_character(), long_title = col_character()))
+
+# Diagnosebezeichner hinzufügen
+mimic.diagnoses.annotated <- mimic.diagnoses.raw %>% inner_join(mimic.d_icd_diagnoses.raw %>% select(icd9_code, short_title, long_title), by = "icd9_code")
+
+# Laborbefunde laden
+mimic.labevents.raw <- read_csv(paste(base_url, "mimic-iii-demo/LABEVENTS.csv", sep=""),
+                                col_types = cols(row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), itemid = col_integer(), charttime = col_datetime(format = ""), value = col_character(), valuenum = col_double(), valueuom = col_character(), flag = col_character()))
+
+# Bezeichner laden
+mimic.d_labitems.raw <- read_csv(paste(base_url, "mimic-iii-demo/D_LABITEMS.csv", sep=""),
+                                 col_types = cols(row_id = col_integer(), itemid = col_integer(), label = col_character(), fluid = col_character(), category = col_character(), loinc_code = col_character()))
+
+# Bezeichner hinzufügen
+mimic.labevents.annotated <- mimic.labevents.raw %>% 
+    inner_join(mimic.d_labitems.raw %>% select(itemid, label, fluid, category, loinc_code), by = "itemid") %>%
+    select(hadm_id, category, fluid, itemid, label, valuenum, valueuom) %>%
+    filter(!is.na(hadm_id), !is.na(valuenum))
+
+# ICD9-Hierarchie aus Package in ein Tibble überführen
+icd9.hierarchy.raw <- icd9cm_hierarchy
+
+# Datentypanpassung der "code"-Spalte, um einen Join mit den MIMIC-Diagnosen zu ermöglichen
+icd9.hierarchy.raw$icd9_code <- as.character(icd9.hierarchy.raw$code)
+
+# Hauptdiagnosen auf ICD9-Kapitel abbilden und den Labordaten zuordnen
+# Hinweis: Laut Dokumentation wird die Hauptdiagnose in der Regel "als erstes" angegeben und ist über die Spalte seq_num == 1 selektierbar
+diagnoses_labs <- mimic.diagnoses.raw %>% 
+    # Hauptdiagnose filtern
+    filter(seq_num == 1) %>%
+    # nur Spalten Fallnummer und ICD9-Code selektieren
+    select(hadm_id, icd9_code) %>%
+    # ICD9-Kapitel aus Hierarchie ergänzen
+    inner_join(icd9.hierarchy.raw %>% select(icd9_code, chapter), by = "icd9_code") %>%
+    # Mehrfachdiagnosen entfernen
+    distinct() %>%
+    # Relevante Spalten der Laborbefunde hinzufügen
+    inner_join(mimic.labevents.annotated %>% select(hadm_id, label, fluid, valuenum, valueuom), by = "hadm_id") %>%
+    # auf relevante Spalten reduzieren
+    select(chapter, label, fluid, valuenum, valueuom)
+```
+
+## Überblick der geladenen Daten
+
+Wir haben zunächst die Behandlungsfälle und ihre Diagnosen geladen. Den Diagnosen haben wir mit Hilfe des 
+(in Amerika verwendeten) ICD9-Katalogs übergeordnete Kapitel zugeordnet, um sie in grobe Kategorien einzuteilen.
+Für jeden Behandlungsfall haben wir jeweils eine Hauptdiagnose zugeordnet, die in der Auswertung berücksichtigt werden soll (gemäß MIMIC-Dokumentation ist dies die erste dokumentierte Diagnose).
+
+Anschließend haben wir die Laborbefunde geladen und mit der Hauptdiagnose (bzw. dem ICD9-Kapitel) zusammengeführt.
+Die resultierende Tabelle enthält folgende Spalten:
+* chapter: ICD9-Diagnosekapitel
+* label: Bezeichner des untersuchten Laboranalyts
+* fluid: Probenmaterial, aus dem der Analyt bestimmt wurde
+* valuenum: Ausprägung des Befunds
+* valueuom: Einheit des Befunds
+
+```{r}
+head(diagnoses_labs)
+```
+
+# Demo
+
+Im folgenden wollen wir für den Laborwert Kreatin darstellen, wie seine Verteilung in Bezug auf die verschiedenen Kapitel des ICD9-Katalogs aussieht. Die Annahme ist, dass das Kreatinin als Nierenwert vor allem bei den Nierenerkrankungen gegenüber den andere Kapiteln des ICD9-Katalogs erhöht sein sollte.
+
+Hierzu suchen wir wie in Übung 3 zunächst den Namen und die Probenmaterialien des Kreatinins heraus. Auch hier wollen wir nur die Messungen aus Blut einbeziehen.
+
+```{r}
+# Kreatinin-Befunde suchen & mit dem Probenmaterial und Anzahl anzeigen
+mimic.labevents.annotated %>%
+    filter(grepl("creatinine", tolower(label))) %>%
+    group_by(itemid, label, fluid) %>%
+    summarize(n = n(), .groups = "keep")
+```
+
+Sie sehen, dass es insgesamt 6 Analyte für die Bestimmung von Kreatinin gibt. 
+Nur ein Analyt (das am häufigsten bestimmte) wird aus Blut bestimmt. 
+
+Wir können die Daten jetzt als Boxplot visualisieren. Hierzu verwenden wir wie in Übung 3 die `ggplot()`-Funktion zusammen mit der `geom_boxplot()`-Funktion. Bei den Aesthetics setzen wir das Diagnosekapitel auf die X-Achse und den Befundwert auf die Y-Achse. Als Füllfarbe setzen wir ebenfalls das Diagnosekapitel. Den Datensatz filtern wird direkt im data-Segment der `ggplot()`-Funktion auf Kreatinin-Befunde, die aus Blut bestimmt wurden.
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 5)
+
+# Boxplots der Kreatininwerte gegenüber den ICD-Diagnosekapiteln darstellen
+ggplot(data = diagnoses_labs %>% filter(label == "Creatinine", fluid == "Blood"),
+       aes(x = chapter, y = valuenum, fill = chapter)) +
+  geom_boxplot()
+```
+
+Sie sehen, dass der schon aus Übung 3 bekannte Outlier das Diagramm so stark staucht, dass es nicht interpretiert werden kann.
+
+Wir fügen deshalb einen weiteren Filter hinzu, der nur Ausprägungen < 100 zulässt:
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 5)
+
+# Boxplots der Kreatininwerte gegenüber den ICD-Diagnosekapiteln darstellen
+ggplot(data = diagnoses_labs %>% filter(label == "Creatinine", fluid == "Blood", valuenum < 100),
+       aes(x = chapter, y = valuenum, fill = chapter)) +
+    geom_boxplot()
+```
+
+Sie sehen, dass das Diagramm jetzt deutliche Unterschiede zwischen den ICD9-Kapiteln zeigt, und der Median bei den Erkrankungen des Urogenitalsystems erhöht ist.
+
+Die Beschriftungen sind allerdings schwer lesbar, da die Bezeichnungen der ICD9-Kapitel sehr lang sind. Hier können wir folgende Optimierungen vornehmen:
+* Zeilenumbruch der Kapitelnamen nach 30 Zeichen mit der Funktion `str_wrap()` (wichtig: dies muss sowohl für die X-Achse als auch die Füllfarbe identisch angegeben werden)
+* Verringerung der Schriftgröße für die Beschriftung der X-Achse sowie Kippen der Schreibrichtung um 45 Grad mit der `theme()`-Funktion
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 5)
+
+# Boxplots der Kreatininwerte gegenüber den ICD-Diagnosekapiteln darstellen
+ggplot(data = diagnoses_labs %>% filter(label == "Creatinine", fluid == "Blood", valuenum < 100),
+       aes(x = str_wrap(chapter, 30), y = valuenum, fill = str_wrap(chapter, 30))) +
+    geom_boxplot() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+          legend.text = element_text(size = 8))
+```
+
+# Aufgaben
+
+Ab hier sollen Sie sich selbst in den Daten der Diagnosen- & Laborbefundtabelle umschauen und dazu für konkrete Fragestellungen die im obigen Beispiel gezeigten Visualisierungen in kleinen Schritten anpassen.
+
+### Aufgabe 1: Troponin T-Werte gegenüber den ICD9-Diagnosekapiteln auswerten
+
+Troponin T ist ein Laborbefund, der typischerweise bei Herzerkrankungen (z.B. Herzinfarkt) erhöht ist. Wir wollen deshalb überprüfen, ob wir diesen Zusammenhang an unseren Befunddaten nachvollziehen können.
+
+Hierzu müssen wir zunächst den Bezeichner und Probenmaterial für Troponin T in den Befunden heraussuchen. Sie können hierzu das Statement für die Suche der Kreatininwerte von oben kopieren und anpassen.
+
+```{r}
+# Troponin-Befunde suchen & mit dem Probenmaterial und Anzahl anzeigen
+```
+
+Wir sehen, dass es genau 2 Troponin-Analyte gibt, die beide aus Blut bestimmt werden. Wir wollen in dieser Aufgabe nur das Troponin T auswerten.
+
+Als nächstes können wir den Boxplot erstellen. Hierzu können Sie den Boxplot der letzten Kreatinin-Visualisierung von oben kopieren und anpassen. Nötige Änderungen:
+* Anpassung der Filterkriterien auf Troponin T. Die Filterung auf Probenmaterial Blut kann entfallen, da dieser Befund nur aus Blut erstellt wird. Wichtig: auch das Ausfiltern des Outliers muss gestrichen werden.
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+
+# Boxplots der Troponinwerte gegenüber den ICD-Diagnosekapiteln darstellen
+```
+
+### Aufgabe 2: Auswertung für weitere Laborbefunde wiederholen
+
+Sie können beispielsweise den Mineralstoff Kalium (englisch: Potassium) oder den Leberwert Gesamt-Bilirubin im Vergleich der ICD9-Kapitel visualisieren. Suchen Sie hierzu wie gewohnt zunächst nach dem Bezeichner und Probenmaterial des jeweiligen Befunds und filtern für die Visualisierung entsprechend auf genau einen Parameter und ggf. ein Probenmaterial.
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+
+# Boxplots der Kaliumwerte gegenüber den ICD-Diagnosekapiteln darstellen
+```
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+
+# Boxplots der Gesamt-Bilirubinwerte gegenüber den ICD-Diagnosekapiteln darstellen
+```
+

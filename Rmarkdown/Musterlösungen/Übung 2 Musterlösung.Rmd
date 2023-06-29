@@ -1,0 +1,192 @@
+---
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/Musterlösungen/Übung
+  2 Musterlösung.ipynb"
+output: html_document
+---
+
+# Übung 2: Visualisierung von Vitalparametern
+
+## Bibliotheken & Konfiguration
+
+```{r}
+packages <- c("readr", "dplyr", "ggplot2", "gridExtra")
+install.packages(setdiff(packages, rownames(installed.packages())))
+lapply(packages, require, character.only = TRUE)
+
+base_url <- "https://raw.githubusercontent.com/ganslats/TMF-School-Datenanalyse-Visualisierung/master/Rohdaten/"
+```
+
+## Vorbereitende Schritte
+
+#### MIMIC III-Daten laden
+
+Hinweis: das Laden der Daten (vor allem Chartevents-Tabelle) kann etwas dauern
+
+```{r}
+# Chartevents laden
+mimic.chartevents.raw <- read_csv(paste(base_url, "mimic-iii-demo/CHARTEVENTS.csv", sep=""),
+                                  col_types = cols(row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), icustay_id = col_integer(), itemid = col_integer(), charttime = col_datetime(format = ""), storetime = col_datetime(format = ""), cgid = col_double(), value = col_character(), valuenum = col_double(), valueuom = col_character(), warning = col_double(), error = col_double(), resultstatus = col_character(), stopped = col_character()))
+
+# Bezeichner laden
+mimic.d_items.raw <- read_csv(paste(base_url, "mimic-iii-demo/D_ITEMS.csv", sep=""),
+                              col_types = cols(row_id = col_integer(), itemid = col_integer(), label = col_character(), abbreviation = col_character(), dbsource = col_character(), linksto = col_character(), category = col_character(), unitname = col_character(), param_type = col_character(), conceptid = col_character()))
+
+# Bezeichner hinzufügen
+mimic.chartevents.annotated <- mimic.chartevents.raw %>%
+  inner_join(mimic.d_items.raw %>% select(itemid, category, label), by = "itemid")
+
+# LOINC-Mapping der Vitalparameter laden
+map.vitalparameter <- read_delim(paste(base_url, "%C3%9Cbung/map_chartevents_vitalzeichen.csv", sep=""), delim = ";",
+                                 col_types = cols(group_id = col_character(), group_name = col_character(), itemid = col_double(), label = col_character(), loinc_code_generic = col_character(), loinc_name_generic = col_character(), loinc_code_specific = col_character(), loinc_name_specific = col_character()))
+
+# Vitalparameter mit Hilfe des Mappings aus den Chartevents selektieren und Bezeichner ergänzen
+vitalparameter <- mimic.chartevents.annotated %>% 
+    filter(icustay_id == 223177, !is.na(valuenum)) %>%
+    select(icustay_id, itemid, charttime, valuenum) %>%
+    inner_join(map.vitalparameter %>% select(itemid, group_id, group_name, label, loinc_name_generic, loinc_name_specific, uom), by = "itemid") %>%
+    relocate(icustay_id, group_id, group_name, loinc_name_generic, loinc_name_specific, itemid, label, charttime, valuenum, uom)
+```
+
+## Überblick der geladenen Daten
+
+Wir haben die Tabelle `CHARTEVENTS` geladen, in der Ereignisse aus der Patientenkurve gesammelt werden. Für die Vitalzeichen, die wir in dieser Übung darstellen wollen, haben wir zusätzlich ein Mapping mit übergeordneten Kategorien geladen (Tabelle `MAP_CHARTEVENTS_VITALZEICHEN`) und aus beiden Tabellen nur die für die Aufgabe nötigen Spalten ausgewählt. Der Datensatz ist außerdem auf einen einzelnen Intensivaufenthalt eines Patienten eingeschränkt, der für diese Aufgabe sinnvolle Daten enthält.
+
+Die zusammengeführte Tabelle hat folgende Spalten:
+* icustay_id: Nummer des Intensivaufenthalts
+* group_id: Kürzel der Gruppe des Vitalparameters (z.B. "HR")
+* group_name: Name der Gruppe des Vitalparameters (z.B. "Heart Rate")
+* loinc_name_generic: Allgemeiner Name aus dem LOINC-Katalog (z.B. "Systolic Blood Pressure")
+* loinc_name_specific: Detaillierte Name aus dem LOINC-Katalog (z.B. "Systolic Blood Pressure by noninvasive")
+* itemid: ID für den Typ des Ereignisses (z.B. für eine Temperaturmessung)
+* label: Bezeichner des Ereignisses
+* charttime: Zeitpunkt des Ereignisses
+* valuenum: Ausprägung des Ereignisses als Zahl (z.B. die Temperatur)
+* uom: Einheit der Ausprägung (Unit of measure, z.B. mmol/l)
+
+```{r}
+# Erste Zeilen der zusammengeführten Chartevents-Tabelle anzeigen
+head(vitalparameter)
+```
+
+# Demo
+
+Im folgenden visualisieren wir schrittweise verschiedene Merkmale aus den Vitalzeichen.
+
+Als erstes stellen wir den Blutdruck im Zeitverlauf als Scatterplot mit der `ggplot()`-Funktion dar. 
+Hierzu sind folgende Schritte nötig:
+* mit der `options()`-Funktion können wir das Größenverhältnis (Breite/Höhe) des Diagramms vorgeben, um eine für die jeweiligen Inhalte passende Form sicherzustellen
+* mit der `ggplot()`-Funktion legen wir zunächst die darzustellenden Daten sowie die Abbildung der Spalten auf die Achsen fest:
+    * `data`= darzustellendes Dataframe; hier filtern wir direkt im Statement auf das die Gruppe "BP" (=Blood Pressure)
+    * `aes()` = Eigenschaften ("Aesthetics") der Grafik; hier konkret die Achsen: auf der X-Achse wird der Zeitpunkt der Messung und auf der Y-Achse die Ausprägung dargestellt
+* mit der `geom_point()`- Funktion zeigen wir die einzelnen Ausprägungen als Punkte auf diesen Achsen an
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 3)
+
+# Blutdruck im Zeitverlauf als Scatterplot darstellen
+ggplot(data = vitalparameter %>% filter(group_id == "BP"), aes(x = charttime, y = valuenum)) +
+    geom_point()
+```
+
+Wir sehen einen Scatterplot, dessen Achsen anhand der enthaltenen Daten von ggplot automatisch beschriftet und eingeteilt wurden. Es ist erkennbar, dass die Werte in zwei weitestgehend getrennten Bereichen liegen, die vermutlichfür die systolischen und diastolischen Blutdruckmessungen stehen.
+
+Um die systolischen und diastolischen Messungen voneinander abgrenzen zu können, nehmen wir zusätzlich die Art des Messwerts (Spalte loinc_name_generic) in die Aesthetics auf und verknüpfen ihn mit der Füllfarbe der Punkte:
+* in der `aes()`-Funktion die Zuweisung `color = loinc_name_generic`ergänzen
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 3)
+
+# Blutdruck im Zeitverlauf als Scatterplot darstellen
+ggplot(data = vitalparameter %>% filter(group_id == "BP"), aes(x = charttime, y = valuenum, color = loinc_name_generic)) +
+    geom_point()
+```
+
+Wir sehen, dass die systolischen & diastolischen Werte farblich zugeordnet wurden und so im Diagramm gut voneinander unterschieden werden können.
+
+Um den Blutdruckverlauf besser beurteilen zu können, passen wir als nächstes den Abschnitt der Y-Achse an:
+* Ergänzung der Funktion `ylim()`, mit der wir den Bereich (von - bis) des Y-Achsenabschnitts vorgeben können
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 3)
+
+# Blutdruck im Zeitverlauf als Scatterplot darstellen
+ggplot(data = vitalparameter %>% filter(group_id == "BP"), aes(x = charttime, y = valuenum, color = loinc_name_generic)) +
+    geom_point() +
+    ylim(0, 250)
+```
+
+Wir sehen, dass die Skalierung jetzt einen üblichen Wertebereich abdeckt, der auch weitere Schwankungen nach oben oder unten zeigen würde. Es ist auch zu erkennen, dass sich einzelne Messwerte der beiden Reihen überlappen und ggf. gegenseitig überschneiden könnten
+
+Um die Messreihen unabhängig voneinander in separaten Abbildungen zeigen zu können, verwenden wir die `facet_wrap()`-Funktion, mit der wir eine Abbildung nach beliebigen Merkmalen ("Facetten") in Teildiagramme zerlegen können. Ggplot sorgt dabei automatisch für identische Achsabschnitte und -beschriftungen in allen so entstehenden Teilen.
+
+Notwendige Änderungen:
+* Ergänzung der `facet_grid()`-Funktion mit Angabe der Spalte "loinc_name_generic" als Facette und Zuweisung von `ncol` (=Anzahl der Spalten) auf 1, damit die Teildiagramme untereinander stehen
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 3)
+
+# Blutdruck im Zeitverlauf als Scatterplot darstellen
+ggplot(data = vitalparameter %>% filter(group_id == "BP"), aes(x = charttime, y = valuenum, color = loinc_name_generic)) +
+    geom_point() +
+    ylim(0, 250) +
+    facet_wrap(~loinc_name_generic, ncol = 1)
+```
+
+# Aufgaben
+
+Ab hier sollen Sie sich selbst in den Daten der Chartevents-Tabelle umschauen und dazu für konkrete Fragestellungen die im obigen Beispiel gezeigten Visualisierungen in kleinen Schritten anpassen.
+
+### Aufgabe 1: Körpertemperatur visualisieren
+
+Statt dem Blutdruck soll jetzt die die Körpertemperatur visualisiert werden. 
+
+Sie können hierzu die erste Visualisierung oben kopieren und anpassen. Notwendige Änderungen:
+* Austausch der gefilterten Gruppen-ID auf "Temp"
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 2)
+
+# Blutdruck im Zeitverlauf als Scatterplot darstellen
+ggplot(data = vitalparameter %>% filter(group_id == "Temp"), aes(x = charttime, y = valuenum)) +
+    geom_point()
+```
+
+Sie sehen einen Scatterplot der Körpertemperatur über die Zeit, jedoch noch nicht mit einem sinnvollen Y-Achsenabschnitt.
+
+Passen Sie als nächstes den Achsenabschnitt an. Notwendige Änderungen
+* Ergänzung der `ylim()`-Funktion mit einer sinnvollen Vorgabe für den Abschnitt der Y-Achse
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 2)
+
+# Blutdruck im Zeitverlauf als Scatterplot darstellen
+ggplot(data = vitalparameter %>% filter(group_id == "Temp"), aes(x = charttime, y = valuenum)) +
+    geom_point() +
+    ylim(32, 42)
+```
+
+### Aufgabe 2: Herzfrequenz visualisieren
+
+Statt dem Körpertemperatur soll jetzt die die Herzfreuqenz visualisiert werden. 
+Sie soll gleich mit einem sinnvollen Y-Achsenabschnitt dargestellt werden.
+
+Sie können hierzu die letzte Visualisierung oben kopieren und anpassen. Notwendige Änderungen:
+* Austausch der gefilterten Gruppen-ID auf "HR"
+* Anpassung des Y-Achsenabschnitts in der `ylim()`-Funktion
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 10, repr.plot.height = 2)
+
+# Blutdruck im Zeitverlauf als Scatterplot darstellen
+ggplot(data = vitalparameter %>% filter(group_id == "HR"), aes(x = charttime, y = valuenum)) +
+    geom_point() +
+    ylim(0, 250)
+```
+

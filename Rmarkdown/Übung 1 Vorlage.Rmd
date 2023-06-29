@@ -1,0 +1,177 @@
+---
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/Übung
+  1 Vorlage.ipynb"
+output: html_document
+---
+
+# Übung 1: Orientierung in den Daten der MIMIC-Tabelle Chartevents
+
+## Bibliotheken & Konfiguration
+
+```{r}
+packages <- c("readr", "dplyr")
+install.packages(setdiff(packages, rownames(installed.packages())))
+lapply(packages, require, character.only = TRUE)
+
+base_url <- "https://raw.githubusercontent.com/ganslats/TMF-School-Datenanalyse-Visualisierung/master/Rohdaten/"
+```
+
+## Vorbereitende Schritte
+
+#### MIMIC III-Daten laden
+
+Hinweis: das Laden der Daten (vor allem Chartevents-Tabelle) kann etwas dauern
+
+```{r}
+# Chartevents laden
+mimic.chartevents.raw <- read_csv(paste(base_url, "mimic-iii-demo/CHARTEVENTS.csv", sep=""),
+                                  locale = readr::locale(encoding = "UTF-8"),
+                                  col_types = cols(row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), icustay_id = col_integer(), itemid = col_integer(), charttime = col_datetime(format = ""), storetime = col_datetime(format = ""), cgid = col_double(), value = col_character(), valuenum = col_double(), valueuom = col_character(), warning = col_double(), error = col_double(), resultstatus = col_character(), stopped = col_character()))
+
+# Bezeichner laden
+mimic.d_items.raw <- read_csv(paste(base_url, "mimic-iii-demo/D_ITEMS.csv", sep=""),
+                              locale = readr::locale(encoding = "UTF-8"), 
+                              col_types = cols(row_id = col_integer(), itemid = col_integer(), label = col_character(), abbreviation = col_character(), dbsource = col_character(), linksto = col_character(), category = col_character(), unitname = col_character(), param_type = col_character(), conceptid = col_character()))
+
+# Bezeichner hinzufügen & auf relevante Spalten einschränken
+mimic.chartevents.annotated <- mimic.chartevents.raw %>%
+  inner_join(mimic.d_items.raw %>% select(itemid, category, label), by = "itemid") %>%
+  select(subject_id, hadm_id, itemid, charttime, valuenum, valueuom, category, label)
+```
+
+## Überblick der geladenen Daten
+
+Wir haben die Tabelle `CHARTEVENTS` geladen, in der Ereignisse aus der Patientenkurve gesammelt werden. Da die Ereignisse in dieser Tabelle nur über eine numerische ID (`itemid`) dargestellt sind, haben wir die Tabelle `D_ITEMS` hinzugefügt, in der für jedes Ereignis eine Kategorie und ein Bezeichner geführt werden. Wir haben außerdem alle Spalten entfernt, die wir für diese Übung nicht brauchen.
+
+Die zusammengeführte Tabelle hat folgende Spalten:
+* subject_id: Patienten-ID
+* hadm_id: Fallnummer
+* itemid: ID für den Typ des Ereignisses (z.B. für eine Temperaturmessung)
+* charttime: Zeitpunkt des Ereignisses
+* valuenum: Ausprägung des Ereignisses als Zahl (z.B. die Temperatur)
+* valueuom: Einheit der Ausprägung (Unit of measure, z.B. mmol/l)
+* category: Kategorie des Ereignisses aus der Tabelle `D_ITEMS`
+* label: Bezeichner des Ereignisses aus der Tabelle `D_ITEMS`
+
+```{r}
+# Erste Zeilen der zusammengeführten Chartevents-Tabelle anzeigen
+head(mimic.chartevents.annotated)
+```
+
+# Demo
+
+### Sichtung der Kategorien von Ereignissen in der Patientenkurve
+
+Im folgenden Beispiel schauen wir uns an, welche übergeordneten Kategorien von Ereignissen mit welcher Häufigkeit im Datensatz erfasst wurden.
+
+Hierzu nutzen wir die Funktionen des `dplyr`-Pakets, um die Datensätze der Tabelle zusammenzufassen.
+
+In einem ersten Schritt schauen wir nur, welche Kategorien überhaupt im Datensatz vorkommen. Hierzu nutzen wir 
+die `select()`-Funktion, die Spalte `category` auszuwählen, und fassen sie anschließend mit der `distinct()`-Funktion
+auf eindeutige Werte zusammen. Die Teilschritte verbinden wir dabei mit dem Pipeline-Symbol `%>%`: 
+
+```{r}
+# Eindeutige Ausprägungen der Spalte "category" abfragen
+mimic.chartevents.annotated %>%
+    select(category) %>%
+    distinct()
+```
+
+Sie sehen eine Liste von 38 Kategorien, die unsortiert ausgegeben werden.
+
+Im nächsten Schritt wollen wir zählen, wie häufig die Kategorien im Datensatz erfasst wurden.
+
+Hierzu nutzen wir die `group_by()` Funktion, um die `category`-Spalte als Aggregationsmerkmal auszuwählen und zählen anschließend mit der Funktion `summarize(n = n())` die Anzahl der jeweils zugeordneten Datensätze. Um eine Warnmeldung zu vermeiden, nutzen wir dabei die Option `.groups = "keep"`. Mit der Funktion `arrange(desc(n))` sortieren wir das Ergebnis absteigend nach der Anzahl:
+
+```{r}
+# Ereignisse pro Kategorie zählen und absteigend sortiert ausgeben
+mimic.chartevents.annotated %>%
+    group_by(category) %>%
+    summarize(n = n(), .groups = "keep") %>%
+    arrange(desc(n))
+```
+
+Wir sehen, dass am häufigsten "NA" angegeben wird, entsprechend Ereignissen ohne Kategorie. Die nächsthäufigste Kategorie ist "Routine Vital Signs" für die Vitalzeichen.
+
+Wir wollen jetzt genauer nachschauen, welche Ereignisse konkret in dieser Kategorie mit welcher Häufigkeit verwendet werden. Hierzu ergänzen wir das vorherige Statement einfach wie folgt:
+* wir schränken die Tabelle mit der Funktion `filter(category == "Routine Vital Signs")` auf diese Kategorie ein
+* wir fügen die Spalte `label` als weiteres Gruppierungsmerkmal in der `group_by()`-Funktion hinzu
+
+```{r}
+# Ereignisse pro Label in der Kategorie "Routine Vital Signs" zählen und absteigend sortiert ausgeben
+mimic.chartevents.annotated %>%
+    filter(category == "Routine Vital Signs") %>%
+    group_by(category, label) %>%
+    summarize(n = n(), .groups = "keep") %>%
+    arrange(desc(n))
+```
+
+Wir wollen uns jetzt das Ereignis "Heart Rate" näher anschauen und dazu den Median, Minimum und Maximum der numerischen Ausprägung (Spalte `valuenum`) bestimmen.
+
+Hierzu passen wir das Statement wie folgt an:
+* wir fügen `label == "Heart Rate"` als zusätzliches Kriterium in der `filter()`-Funktion hinzu
+* wir streichen die `group_by()`-Funktion, da wir über alle verbleibenden Datensätze aggregieren
+* wir ersetzen das Zählen der Datensätze in der `summarize()`-Funktion durch Aggregationen für Median, Minimum und Maximum
+
+```{r}
+# Median, Minimum und Maximum der Herzfrequenz berechnen
+mimic.chartevents.annotated %>%
+    filter(category == "Routine Vital Signs", label == "Heart Rate") %>%
+    summarize(value_median = median(valuenum),
+              value_min    = min(valuenum),
+              value_max    = max(valuenum)
+             ) 
+```
+
+Abschließend wollen wir die gleichen Maßzahlen für alle systolischen Blutdruck-Ereignisse bestimmen. Wie Sie oben in der Liste der Ereignistypen in der Kategorie Vitalzeichen sehen können, gibt es für den systolischen Blutdruck anders als bei der Herzfrequenz mehrere unterschiedliche Merkmale. Um alle relevanten Merkmale auszuwerten, könnten Sie alle 5 Bezeichnungen als Kriterien in die `filter()`-Funktion aufnehmen. Einfacher ist es hier, nur das Wort `sytolic` im Text zu suchen, was mit der `grepl()`-Funktion möglich ist. Da das Wort sowohl in Groß- als auch Kleinschreibung auftaucht, müssen wir die Bezeichnung vorher noch auf Kleinschreibung umstellen.
+
+Hierzu passen wir das Statement wie folgt an:
+* Ersetzen des Filterkriteriums `label == "Heart Rate"` durch eine Textsuche mit der `grepl()`-Funktion und Kleinschreibung der label-Spalte mit der `tolower()`-Funktion
+* Wiederaufnahme einer `group_by()`-Funktion für die Spalte label
+* dazu passend Ergänzung der Option `groups = "keep"` in der `summarize()`-Funktion
+
+```{r}
+# Median, Minimum und Maximum aller systolischen Blutdruckereignisse berechnen
+mimic.chartevents.annotated %>%
+    filter(category == "Routine Vital Signs", grepl("systolic", tolower(label))) %>%
+    group_by(label) %>%
+    summarize(value_median = median(valuenum),
+              value_min    = min(valuenum),
+              value_max    = max(valuenum),
+              .groups = "keep"
+             ) 
+```
+
+Wir können hier erkennen, dass die manuell gemessenen Werte in der Regel niedriger sind, außerdem gibt es einen eindeutigen Ausreißer (11.647) bei der noninvasiven Messung.
+
+# Aufgaben
+
+Ab hier sollen Sie sich selbst in den Daten der Chartevents-Tabelle umschauen und dazu für konkrete Fragestellungen die im obigen Beispiel gezeigten Abfragen in kleinen Schritten anpassen.
+
+### Aufgabe 1: Befunde der Kategorie "Labs" betrachten
+
+Statt der Kategorie "Routine Vital Signs" soll jetzt die Kategorie "Labs" untersucht werden. Konkret wollen wir wissen, wie oft die darin enthaltenen Merkmale im Datensatz vorkommen. Die Ergebnisliste soll absteigend nach Häufigkeit sortiert sein.
+
+Sie können hierzu die Abfrage oben für die Zählung der Merkmale bei den Vitalzeichen kopieren und anpassen. Notwendige Änderungen:
+* Austausch des Kategorienamens
+
+```{r}
+# Ereignisse pro Label in der Kategorie "Labs" zählen und absteigend sortiert ausgeben
+```
+
+Wir sehen, dass es 83 Merkmale in der Kategorie "Labs" gibt, und dass die Glucosemessung per Teststreifen am häufigsten erfasst wurde.
+
+### Aufgabe 2: Ausprägungen für der Glucose-Messungen auswerten
+
+Als nächstes wollen wir die Auswertung des systolischen Blutdrucks auf die Glucose-Messungen übertragen. Auch hier gibt es mehrere Merkmale, die das Wort Glucose in unterschiedlichen Kombinationen enthalten. Die Auswertung soll das Label, Median, Minimum und Maximum enthalten.
+
+Sie können hierzu die Abfrage oben für die Auswertung der systolischen Blutdrücke kopieren und anpassen. Notwendige Änderungen:
+* Austausch des Kategorienamens gegen "Labs"
+* Austausch des zu filternden Labels gegen "glucose"
+
+```{r}
+# Median, Minimum und Maximum aller Glucose-Messungen berechnen
+```
+
+Wir sehen, dass es 3 verschiedene Glucose-Merkmale gibt. 
+

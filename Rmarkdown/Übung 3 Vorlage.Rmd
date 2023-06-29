@@ -1,0 +1,208 @@
+---
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/Übung
+  3 Vorlage.ipynb"
+output: html_document
+---
+
+# Übung 3: Selektion von Patientenkohorten nach Diagnose
+
+## Bibliotheken & Konfiguration
+
+```{r}
+packages <- c("readr", "dplyr", "lubridate", "tidyr", "ggplot2")
+install.packages(setdiff(packages, rownames(installed.packages())))
+lapply(packages, require, character.only = TRUE)
+
+base_url <- "https://raw.githubusercontent.com/ganslats/TMF-School-Datenanalyse-Visualisierung/master/Rohdaten/"
+```
+
+## Vorbereitende Schritte
+
+#### MIMIC III-Daten laden
+
+Hinweis: das Laden der Daten (vor allem Chartevents-Tabelle) kann etwas dauern
+
+```{r}
+# Patientenstammdaten laden
+mimic.patients.raw <- read_csv(paste(base_url, "mimic-iii-demo/PATIENTS.csv", sep=""),
+                               col_types = cols(row_id = col_integer(), subject_id = col_integer(), gender = col_character(), dob = col_datetime(format = ""), dod = col_datetime(format = ""), dod_hosp = col_datetime(format = ""), dod_ssn = col_datetime(format = ""), expire_flag = col_double()))
+
+# Behandlungsfälle laden
+mimic.admissions.raw <- read_csv(paste(base_url, "mimic-iii-demo/ADMISSIONS.csv", sep=""),
+                                 col_types = cols(  row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), admittime = col_datetime(format = ""), dischtime = col_datetime(format = ""), deathtime = col_datetime(format = ""), admission_type = col_character(), admission_location = col_character(), discharge_location = col_character(), insurance = col_character(), language = col_character(), religion = col_character(), marital_status = col_character(), ethnicity = col_character(), edregtime = col_datetime(format = ""), edouttime = col_datetime(format = ""), diagnosis = col_character(), hospital_expire_flag = col_double(), has_chartevents_data = col_double()))
+
+# Intensivaufenthalte laden
+mimic.icustays.raw <- read_csv(paste(base_url, "mimic-iii-demo/ICUSTAYS.csv", sep=""),
+                               col_types = cols(row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), icustay_id = col_integer(), dbsource = col_character(), first_careunit = col_character(), last_careunit = col_character(), first_wardid = col_double(), last_wardid = col_double(), intime = col_datetime(format = ""), outtime = col_datetime(format = ""), los = col_double()))
+
+# Diagnosen laden
+mimic.diagnoses.raw <- read_csv(paste(base_url, "mimic-iii-demo/DIAGNOSES_ICD.csv", sep=""),
+                                col_types = cols(row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), seq_num = col_integer(), icd9_code = col_character()))
+
+# Diagnosebezeichner laden
+mimic.d_icd_diagnoses.raw <- read_csv(paste(base_url, "mimic-iii-demo/D_ICD_DIAGNOSES.csv", sep=""),
+                                      col_types = cols(row_id = col_integer(), icd9_code = col_character(), short_title = col_character(), long_title = col_character()))
+
+# Diagnosebezeichner hinzufügen
+mimic.diagnoses.annotated <- mimic.diagnoses.raw %>% inner_join(mimic.d_icd_diagnoses.raw %>% select(icd9_code, short_title, long_title), by = "icd9_code")
+
+# Laborbefunde laden
+mimic.labevents.raw <- read_csv(paste(base_url, "mimic-iii-demo/LABEVENTS.csv", sep=""),
+                                col_types = cols(row_id = col_integer(), subject_id = col_integer(), hadm_id = col_integer(), itemid = col_integer(), charttime = col_datetime(format = ""), value = col_character(), valuenum = col_double(), valueuom = col_character(), flag = col_character()))
+
+# Bezeichner laden
+mimic.d_labitems.raw <- read_csv(paste(base_url, "mimic-iii-demo/D_LABITEMS.csv", sep=""),
+                                 col_types = cols(row_id = col_integer(), itemid = col_integer(), label = col_character(), fluid = col_character(), category = col_character(), loinc_code = col_character()))
+
+# Bezeichner hinzufügen
+mimic.labevents.annotated <- mimic.labevents.raw %>% 
+    inner_join(mimic.d_labitems.raw %>% select(itemid, label, fluid, category, loinc_code), by = "itemid") %>%
+    select(hadm_id, category, fluid, itemid, label, valuenum, valueuom) %>%
+    filter(!is.na(hadm_id), !is.na(valuenum))
+```
+
+### Kohorten kennzeichnen
+
+```{r}
+# AMI-Kohorte (Akute Myocardial infarction)
+cohort.ami <- mimic.diagnoses.annotated %>% 
+    filter(grepl("Acute myocardial infarction", long_title)) %>%
+    select(hadm_id) %>%
+    distinct() %>%
+    mutate(cohort_ami_flag = TRUE)
+
+# AKF-Kohorte (Acute Kidney Failure)
+cohort.akf <- mimic.diagnoses.annotated %>% 
+    filter(grepl("Acute kidney failure", long_title)) %>%
+    select(hadm_id) %>%
+    distinct() %>%
+    mutate(cohort_akf_flag = TRUE)
+
+# Falltabelle (admissions) um die Kohorten-Flags ergänzen
+cohort.all <- mimic.admissions.raw %>%
+    left_join(cohort.ami, by = "hadm_id") %>%  # AMI-Kohorte hinzufügen
+    left_join(cohort.akf, by = "hadm_id") %>%  # ACF-Kohorte hinzufügen
+    replace_na(list(cohort_ami_flag = FALSE,   # "NA"-Einträge in den Kohorten-Flags durch FALSE ersetzen
+                    cohort_acf_flag = FALSE)) %>%
+    select(hadm_id, diagnosis, cohort_ami_flag, cohort_akf_flag)
+```
+
+## Überblick der geladenen Daten
+
+Wir haben zunächst die Behandlungsfälle und ihre Diagnosen geladen. Mit Hilfe der Diagnosen haben wir 2 Kohorten gebildet:
+* AMI-Kohorte: mit akutem Myokardinfarkt als Hauptdiagnose
+* AKF-Kohorte: mit auktem Nierenversagen als Hauptdiagnose
+
+Die Zuordnung zu einer der beiden (oder keiner) Kohorte wurde als je eine Spalte in der Falltabelle ergänzt und diese anschließend auf die tatsächlich benötigten Spalten reduziert:
+* hadm_id: Fallnummer
+* diagnosis: Hauptdiagnose
+* cohort_ami_flag: Flag, ob der Fall in der AMI-Kohorte ist (dann = 1)
+* cohort_akf_flag: Flag, ob der Fall in der AKF-Kohorte ist (dann = 1)
+
+```{r}
+head(cohort.all)
+```
+
+Außerdem wurden Laborwerte geladen und um Bezeichnet ergänzt, die hier auf ihren Bezug zu den beiden Kohorten untersucht werden sollen. Die resultierende Tabelle hat folgende Spalten:
+* hadm_id: Fallnummer
+* category: Kategorie des Laborwerts
+* fluid: Material, aus dem der Laborwert bestimmt wurde
+* itemid: ID für den bestimmten Laboranalyt
+* label: Name des bestimmten Laboranalyts
+* valuenum: Ausprägung des Ereignisses als Zahl (z.B. die Temperatur)
+* valueuom: Einheit der Ausprägung (Unit of measure, z.B. mmol/l)
+
+```{r}
+head(mimic.labevents.annotated)
+```
+
+# Demo
+
+Im folgenden wollen wir für die AMI-Kohorte prüfen, ob sich ein für den Herzinfarkt typischer Laborbefund (Troponin) bei den Patienten innerhalb und außerhalb der Kohorte unterscheidet.
+
+Hierzu müssen wir als erstes herausfinden, ob unser Datensatz Troponinwerte enthält, und aus welchem Material sie bestimmt wurden. Wir können dazu genau so wie in Übung 1 vorgehen, und die Labels der Befunde durchsuchen.
+
+```{r}
+# Troponin-Befunde suchen & mit dem Probenmaterial und Anzahl anzeigen
+mimic.labevents.annotated %>%
+    filter(grepl("troponin", tolower(label))) %>%
+    group_by(itemid, label, fluid) %>%
+    summarize(n = n(), .groups = "keep")
+```
+
+Wir sehen, dass es genau 2 Troponin-Analyte gibt, die beide aus Blut bestimmt werden. Dies entspricht der Erwartung, so dass wir beide Analyte nutzen können, aber im Diagramm getrennt auswerten sollten.
+
+Als nächstes führen wir die Troponin-Befunde mit dem AMI-Kohortenstatus in einer neuen Tabelle zusammen.
+Hierzu verwenden wir die `inner_join()`-Funktion, um die beiden Tabellen über die gemeinsame Spalte `hadm_id` zu verbinden.
+
+```{r}
+# Labordaten auf Troponin filtern & AMI-Kohortenflag ergänzen
+troponin <- mimic.labevents.annotated %>%
+    filter(grepl("troponin", tolower(label))) %>%
+    inner_join(cohort.all %>% select(hadm_id, cohort_ami_flag), by = "hadm_id")
+head(troponin)
+```
+
+Die so generierte Tabelle können wir mit ggplot als Boxplot visualisieren.
+
+Wir verwenden hierzu wieder die `ggplot()`-Funktion und geben als Datensatz die Troponin-Tabelle an. In den Aesthetics setzen wir das Label des Laboranalyts auf die X-Achse, die Ausprägung auf die Y-Achse, und den AMI-Kohortenstatus auf die Füllfarbe der Box. Statt der Scatterplot-Darstellung aus Übung 2 verwenden wir hier die Funktion `geom_boxplot()`, um die Rohdaten als Boxplot darzustellen.
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+options(repr.plot.width = 7, repr.plot.height = 5)
+
+# Boxplot der Troponin-Auspräungen gegen den AMI-Kohortenstatus ausgeben
+ggplot(data = troponin, aes(x = label, y = valuenum, fill = cohort_ami_flag)) +
+    geom_boxplot()
+```
+
+Wir sehen, dass Troponin I nur bei Patienten außerhalb der AMI-Kohorte bestimmt wurde. Bei Troponin T können wir einen deutlichen Unterschied zwischen Patienten außerhalb der Kohorte (niedriger Wert, wenn auch mit einigen Outliern) und innerhalb der Kohorte (höherer Wert, keine Outlier) erkennen.
+
+# Aufgaben
+
+Ab hier sollen Sie sich selbst in den Daten der Kohorten- & Laborbefundtabelle umschauen und dazu für konkrete Fragestellungen die im obigen Beispiel gezeigten Visualisierungen in kleinen Schritten anpassen.
+
+### Aufgabe 1: Kreatininwerte in der AKF-Kohorte auswerten
+
+Beim Nierenversagen ist in der Regel der Kreatininwert erhöht. Dies wollen wir anhand unserer Kohorten- & Laborbefunddaten nachvollziehen. Zu beachten ist allerdings, dass Kreatinin anders als Troponin nicht nur aus dem Blut, sondern auch anderen Probenmaterialien bestimmt werden können (z.B. Urin).
+
+Suchen Sie als erstes heraus, welche Kreatinin-Analyte (englisch: Creatinine) im Datensatz vorhanden sind, und aus welchen Probenmaterialien sie bestimmt wurden. Sie können hierzu die Abfrage für die Recherche des Troponins von oben kopieren und den Suchbegriff anpassen.
+
+```{r}
+# Kreatinin-Befunde suchen & mit dem Probenmaterial und Anzahl anzeigen
+```
+
+Sie sehen, dass es insgesamt 6 Analyte für die Bestimmung von Kreatinin gibt. 
+Nur ein Analyt (das am häufigsten bestimmte) wird aus Blut bestimmt. 
+
+Als nächstes müssen wir die richtigen (aus Blut bestimmten) Kreatininbefunde mit dem AKF-Kohortenstatus zusammenführen.
+Sie können hierzu die Abfrage für die Zusammenführung der Troponin- & AMI-Daten kopieren und anpassen. Nötige Änderungen:
+* Filterung auf Kreatinin und Probenmaterial Blut anpassen
+* Zuordnung nicht des AMI, sondern des AKF-Kohortenflags
+
+```{r}
+# Labordaten auf Kreatinin (im Blut) filtern & AKF-Kohortenflag ergänzen
+```
+
+Abschließend visualisieren Sie die Befunddaten als Boxplot. Sie können hierzu das ggplot-Statement vom Troponin kopieren. Nötige Änderungen:
+* Umstellung des Quelldatensatzes von troponin auf creatinine
+* Änderung des AMI-Flags auf das AKF-Flag
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+
+# Boxplot der Troponin-Auspräungen gegen den AMI-Kohortenstatus ausgeben
+```
+
+Sie sehen, dass das Diagramm durch einen einzelnen Outlier so stark zusammengestaucht wird, dass es nicht mehr interpretiert werden kann. 
+
+Um den Outlier zu entfernen, filtern Sie ihn einfach vor der Visualisierung mit einer Filterfunktion heraus (z.B. `filter(valuenum < 100)`.
+
+```{r}
+# Größenverhältnis des Diagramms festlegen
+
+# Boxplot der Troponin-Auspräungen gegen den AMI-Kohortenstatus ausgeben
+```
+
+Nach Entfernung des Outliers ist ein leichter Unterschied zwischen den Patienten innerhalb und außerhalb der AKF-Kohorte zu erkennen.
+
