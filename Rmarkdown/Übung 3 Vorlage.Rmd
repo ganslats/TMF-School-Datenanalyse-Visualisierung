@@ -81,9 +81,9 @@ cohort.akf <- mimic.diagnoses.annotated %>%
 # Falltabelle (admissions) um die Kohorten-Flags ergänzen
 cohort.all <- mimic.admissions.raw %>%
     left_join(cohort.ami, by = "hadm_id") %>%  # AMI-Kohorte hinzufügen
-    left_join(cohort.akf, by = "hadm_id") %>%  # ACF-Kohorte hinzufügen
+    left_join(cohort.akf, by = "hadm_id") %>%  # AKF-Kohorte hinzufügen
     replace_na(list(cohort_ami_flag = FALSE,   # "NA"-Einträge in den Kohorten-Flags durch FALSE ersetzen
-                    cohort_acf_flag = FALSE)) %>%
+                    cohort_akf_flag = FALSE)) %>%
     select(hadm_id, diagnosis, cohort_ami_flag, cohort_akf_flag)
 ```
 
@@ -191,7 +191,7 @@ Abschließend visualisieren Sie die Befunddaten als Boxplot. Sie können hierzu 
 ```{r}
 # Größenverhältnis des Diagramms festlegen
 
-# Boxplot der Troponin-Auspräungen gegen den AMI-Kohortenstatus ausgeben
+# Boxplot der Kreatinin-Auspräungen gegen den AKF-Kohortenstatus ausgeben
 ```
 
 Sie sehen, dass das Diagramm durch einen einzelnen Outlier so stark zusammengestaucht wird, dass es nicht mehr interpretiert werden kann. 
@@ -201,7 +201,7 @@ Um den Outlier zu entfernen, filtern Sie ihn einfach vor der Visualisierung mit 
 ```{r}
 # Größenverhältnis des Diagramms festlegen
 
-# Boxplot der Troponin-Auspräungen gegen den AMI-Kohortenstatus ausgeben
+# Boxplot der Kreatinin-Auspräungen gegen den AKF-Kohortenstatus ausgeben
 ```
 
 Nach Entfernung des Outliers ist ein leichter Unterschied zwischen den Patienten innerhalb und außerhalb der AKF-Kohorte zu erkennen.
