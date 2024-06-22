@@ -9,7 +9,6 @@ jobs:
     - name: cache binder build on mybinder.org
       uses: jupyterhub/repo2docker-action@master
       with:
-        NO_PUSH: false
 	DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         BINDER_CACHE: true
