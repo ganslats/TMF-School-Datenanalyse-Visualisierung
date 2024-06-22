@@ -1,5 +1,6 @@
 name: Binder
-on: [workflow_dispatch]
+on:
+  workflow_dispatch: 
 
 jobs:
   Create-MyBinderOrg-Cache:
