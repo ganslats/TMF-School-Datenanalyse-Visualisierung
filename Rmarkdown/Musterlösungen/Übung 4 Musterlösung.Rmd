@@ -202,6 +202,14 @@ ggplot(data = diagnoses_labs %>% filter(label == "Troponin T"),
 Sie können beispielsweise den Mineralstoff Kalium (englisch: Potassium) oder den Leberwert Gesamt-Bilirubin im Vergleich der ICD9-Kapitel visualisieren. Suchen Sie hierzu wie gewohnt zunächst nach dem Bezeichner und Probenmaterial des jeweiligen Befunds und filtern für die Visualisierung entsprechend auf genau einen Parameter und ggf. ein Probenmaterial.
 
 ```{r}
+# Kalium-Befunde (potassium) suchen & mit dem Probenmaterial und Anzahl anzeigen
+mimic.labevents.annotated %>%
+    filter(grepl("potassium", tolower(label))) %>%
+    group_by(itemid, label, fluid) %>%
+    summarize(n = n(), .groups = "keep")
+```
+
+```{r}
 # Größenverhältnis des Diagramms festlegen
 options(repr.plot.width = 10, repr.plot.height = 5)
 
@@ -211,6 +219,14 @@ ggplot(data = diagnoses_labs %>% filter(label == "Potassium"),
     geom_boxplot() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
           legend.text = element_text(size = 8))
+```
+
+```{r}
+# Bilirubin-Befunde suchen & mit dem Probenmaterial und Anzahl anzeigen
+mimic.labevents.annotated %>%
+    filter(grepl("bilirubin", tolower(label))) %>%
+    group_by(itemid, label, fluid) %>%
+    summarize(n = n(), .groups = "keep")
 ```
 
 ```{r}

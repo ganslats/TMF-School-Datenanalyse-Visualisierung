@@ -1,6 +1,6 @@
 ---
-title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/Übung
-  3 Vorlage.ipynb"
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/Musterlösungen/Übung
+  3 Musterlösung.ipynb"
 output: html_document
 ---
 
@@ -78,13 +78,12 @@ cohort.akf <- mimic.diagnoses.annotated %>%
     distinct() %>%
     mutate(cohort_akf_flag = TRUE)
 
-# Falltabelle (admissions) um die Kohorten-Flags ergänzen
+# Falltabelle mit beiden Kohorten erstellen
 cohort.all <- mimic.admissions.raw %>%
+    select(hadm_id, diagnosis) %>%             # Aus der Falltabelle nur Fallnummer und Diagnose verwenden
     left_join(cohort.ami, by = "hadm_id") %>%  # AMI-Kohorte hinzufügen
     left_join(cohort.akf, by = "hadm_id") %>%  # AKF-Kohorte hinzufügen
-    replace_na(list(cohort_ami_flag = FALSE,   # "NA"-Einträge in den Kohorten-Flags durch FALSE ersetzen
-                    cohort_akf_flag = FALSE)) %>%
-    select(hadm_id, diagnosis, cohort_ami_flag, cohort_akf_flag)
+    replace(is.na(.), 0)                       # "NA"-Einträge in den Kohorten-Flags durch FALSE ersetzen
 ```
 
 ## Überblick der geladenen Daten
@@ -157,6 +156,7 @@ ggplot(data = troponin, aes(x = label, y = valuenum, fill = cohort_ami_flag)) +
 ```
 
 Wir sehen, dass Troponin I nur bei Patienten außerhalb der AMI-Kohorte bestimmt wurde. Bei Troponin T können wir einen deutlichen Unterschied zwischen Patienten außerhalb der Kohorte (niedriger Wert, wenn auch mit einigen Outliern) und innerhalb der Kohorte (höherer Wert, keine Outlier) erkennen.
+In der Literatur wird für Troponin T angegeben, dass Werte <0.4µg/L im Normbereich liegen, während Werte darüber als Verdacht auf einen Herzinfarkt interpretiert werden können. Dies passt zu unserer Kohortendefinition.
 
 # Aufgaben
 
@@ -170,6 +170,7 @@ Suchen Sie als erstes heraus, welche Kreatinin-Analyte (englisch: Creatinine) im
 
 ```{r}
 # Kreatinin-Befunde suchen & mit dem Probenmaterial und Anzahl anzeigen
+
 ```
 
 Sie sehen, dass es insgesamt 6 Analyte für die Bestimmung von Kreatinin gibt. 
@@ -182,6 +183,7 @@ Sie können hierzu die Abfrage für die Zusammenführung der Troponin- & AMI-Dat
 
 ```{r}
 # Labordaten auf Kreatinin (im Blut) filtern & AKF-Kohortenflag ergänzen
+
 ```
 
 Abschließend visualisieren Sie die Befunddaten als Boxplot. Sie können hierzu das ggplot-Statement vom Troponin kopieren. Nötige Änderungen:
@@ -192,6 +194,7 @@ Abschließend visualisieren Sie die Befunddaten als Boxplot. Sie können hierzu 
 # Größenverhältnis des Diagramms festlegen
 
 # Boxplot der Kreatinin-Auspräungen gegen den AKF-Kohortenstatus ausgeben
+
 ```
 
 Sie sehen, dass das Diagramm durch einen einzelnen Outlier so stark zusammengestaucht wird, dass es nicht mehr interpretiert werden kann. 
@@ -202,6 +205,7 @@ Um den Outlier zu entfernen, filtern Sie ihn einfach vor der Visualisierung mit 
 # Größenverhältnis des Diagramms festlegen
 
 # Boxplot der Kreatinin-Auspräungen gegen den AKF-Kohortenstatus ausgeben
+
 ```
 
 Nach Entfernung des Outliers ist ein leichter Unterschied zwischen den Patienten innerhalb und außerhalb der AKF-Kohorte zu erkennen.

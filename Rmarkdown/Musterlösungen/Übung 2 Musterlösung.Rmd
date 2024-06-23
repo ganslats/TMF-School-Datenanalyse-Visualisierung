@@ -51,6 +51,8 @@ vitalparameter <- mimic.chartevents.annotated %>%
 
 Wir haben die Tabelle `CHARTEVENTS` geladen, in der Ereignisse aus der Patientenkurve gesammelt werden. Für die Vitalzeichen, die wir in dieser Übung darstellen wollen, haben wir zusätzlich ein Mapping mit übergeordneten Kategorien geladen (Tabelle `MAP_CHARTEVENTS_VITALZEICHEN`) und aus beiden Tabellen nur die für die Aufgabe nötigen Spalten ausgewählt. Der Datensatz ist außerdem auf einen einzelnen Intensivaufenthalt eines Patienten eingeschränkt, der für diese Aufgabe sinnvolle Daten enthält.
 
+### Rohdaten
+
 Die zusammengeführte Tabelle hat folgende Spalten:
 * icustay_id: Nummer des Intensivaufenthalts
 * group_id: Kürzel der Gruppe des Vitalparameters (z.B. "HR")
@@ -66,6 +68,13 @@ Die zusammengeführte Tabelle hat folgende Spalten:
 ```{r}
 # Erste Zeilen der zusammengeführten Chartevents-Tabelle anzeigen
 head(vitalparameter)
+```
+
+### Überblick der Struktur & Mengengerüste der geladenen Vitalparameterdaten
+
+```{r}
+# Ausprägungen nach Gruppe & Merkmal zählen
+vitalparameter %>% group_by(group_id, group_name, loinc_name_generic) %>% summarize(n = n(), .groups="keep")
 ```
 
 # Demo

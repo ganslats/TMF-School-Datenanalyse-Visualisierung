@@ -78,13 +78,12 @@ cohort.akf <- mimic.diagnoses.annotated %>%
     distinct() %>%
     mutate(cohort_akf_flag = TRUE)
 
-# Falltabelle (admissions) um die Kohorten-Flags ergänzen
+# Falltabelle mit beiden Kohorten erstellen
 cohort.all <- mimic.admissions.raw %>%
+    select(hadm_id, diagnosis) %>%             # Aus der Falltabelle nur Fallnummer und Diagnose verwenden
     left_join(cohort.ami, by = "hadm_id") %>%  # AMI-Kohorte hinzufügen
     left_join(cohort.akf, by = "hadm_id") %>%  # AKF-Kohorte hinzufügen
-    replace_na(list(cohort_ami_flag = FALSE,   # "NA"-Einträge in den Kohorten-Flags durch FALSE ersetzen
-                    cohort_akf_flag = FALSE)) %>%
-    select(hadm_id, diagnosis, cohort_ami_flag, cohort_akf_flag)
+    replace(is.na(.), 0)                       # "NA"-Einträge in den Kohorten-Flags durch FALSE ersetzen
 ```
 
 ## Überblick der geladenen Daten
@@ -157,6 +156,7 @@ ggplot(data = troponin, aes(x = label, y = valuenum, fill = cohort_ami_flag)) +
 ```
 
 Wir sehen, dass Troponin I nur bei Patienten außerhalb der AMI-Kohorte bestimmt wurde. Bei Troponin T können wir einen deutlichen Unterschied zwischen Patienten außerhalb der Kohorte (niedriger Wert, wenn auch mit einigen Outliern) und innerhalb der Kohorte (höherer Wert, keine Outlier) erkennen.
+In der Literatur wird für Troponin T angegeben, dass Werte <0.4µg/L im Normbereich liegen, während Werte darüber als Verdacht auf einen Herzinfarkt interpretiert werden können. Dies passt zu unserer Kohortendefinition.
 
 # Aufgaben
 

@@ -1,6 +1,6 @@
 ---
-title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/Übung
-  4 Vorlage.ipynb"
+title: An R Markdown document converted from "/Users/ganslats/Project/TMF-School/TMF-School-Datenanalyse-Visualisierung/Notebooks/Musterlösungen/Übung
+  4 Musterlösung.ipynb"
 output: html_document
 ---
 
@@ -174,6 +174,7 @@ Hierzu müssen wir zunächst den Bezeichner und Probenmaterial für Troponin T i
 
 ```{r}
 # Troponin-Befunde suchen & mit dem Probenmaterial und Anzahl anzeigen
+
 ```
 
 Wir sehen, dass es genau 2 Troponin-Analyte gibt, die beide aus Blut bestimmt werden. Wir wollen in dieser Aufgabe nur das Troponin T auswerten.
@@ -185,6 +186,7 @@ Als nächstes können wir den Boxplot erstellen. Hierzu können Sie den Boxplot 
 # Größenverhältnis des Diagramms festlegen
 
 # Boxplots der Troponinwerte gegenüber den ICD-Diagnosekapiteln darstellen
+
 ```
 
 ### Aufgabe 2: Auswertung für weitere Laborbefunde wiederholen
@@ -192,14 +194,26 @@ Als nächstes können wir den Boxplot erstellen. Hierzu können Sie den Boxplot 
 Sie können beispielsweise den Mineralstoff Kalium (englisch: Potassium) oder den Leberwert Gesamt-Bilirubin im Vergleich der ICD9-Kapitel visualisieren. Suchen Sie hierzu wie gewohnt zunächst nach dem Bezeichner und Probenmaterial des jeweiligen Befunds und filtern für die Visualisierung entsprechend auf genau einen Parameter und ggf. ein Probenmaterial.
 
 ```{r}
+# Kalium-Befunde (potassium) suchen & mit dem Probenmaterial und Anzahl anzeigen
+
+```
+
+```{r}
 # Größenverhältnis des Diagramms festlegen
 
 # Boxplots der Kaliumwerte gegenüber den ICD-Diagnosekapiteln darstellen
+
+```
+
+```{r}
+# Bilirubin-Befunde suchen & mit dem Probenmaterial und Anzahl anzeigen
+
 ```
 
 ```{r}
 # Größenverhältnis des Diagramms festlegen
 
 # Boxplots der Gesamt-Bilirubinwerte gegenüber den ICD-Diagnosekapiteln darstellen
+
 ```
 
