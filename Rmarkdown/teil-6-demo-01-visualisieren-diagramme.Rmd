@@ -16,12 +16,11 @@ lapply(packages, require, character.only = TRUE)
 ## Mannheimer Bevölkerungsdaten aus dem Open Data-Portal laden und in "long"-Format pivotieren
 
 ```{r}
-mannheim.population.raw <- read_delim("https://mannheim.opendatasoft.com/explore/dataset/bevolkerungsbestand-in-mannheim-2009-2021/download/?format=csv&timezone=Europe/Berlin&lang=de&use_labels_for_header=true&csv_separator=%3B",
+mannheim.population.raw <- read_delim("https://mannheim.opendatasoft.com/explore/dataset/bevolkerungsbestand-in-mannheim-2009-2023/download/?format=csv&timezone=Europe/Berlin&lang=de&use_labels_for_header=true&csv_separator=%3B",
                                       col_names =    c("id", "jahr", "stadtteil_id", "stadtteil_name", "n_gesamt", "n_weiblich", "n_ohne_migration", "n_mit_migration", "n_auslaender"),
-                                      col_types = cols("i",  "i",    "c",            "c",              "i",        "i",          "i",                "i",               "i"),
-                                      skip = 1, delim=";")
-mannheim.population.long <- mannheim.population.raw %>% pivot_longer(!c(id, jahr, stadtteil_id, stadtteil_name), names_to="variable", values_to="n")
-head(mannheim.population.long)
+                                      col_types = cols("i",  "i",    "c",            "c",              "d",        "d",          "d",                "d",               "d"),
+                                      skip = 1, delim = ";")
+head(mannheim.population.raw)
 ```
 
 ## Einfaches Barchart der Gesamtbevölkerung vs. Zeit

@@ -104,7 +104,7 @@ ggplot(data = germany.response.long, aes(x=date, y=value, fill=variable)) +
 mannheim.all.long <- bind_rows(mannheim.incidence.long, germany.response.long)
 
 # Reihenfolge der Plots definieren
-mannheim.all.long$variable <- factor(mannheim.all.long$variable, levels = c("incidence", "C1_School closing", "C4_Restrictions on gatherings", "C6_Stay at home requirements"))
+mannheim.all.long$variable <- factor(mannheim.all.long$variable, levels = c("incidence", "C1M_School closing", "C4M_Restrictions on gatherings", "C6M_Stay at home requirements"))
 
 # Daten in gemeinsamem Plot darstellen
 ggplot(data = mannheim.all.long) +
@@ -138,6 +138,18 @@ mannheim.mobility.long <- read_delim(paste(base_url, "covid_mannheim_mobility.cs
 head(mannheim.mobility.long)
 ```
 
+## Mobilitätsdaten plotten
+
+```{r}
+options(repr.plot.width = 7, repr.plot.height = 3)
+ggplot(data = mannheim.mobility.long) +
+  # Mobility-Plot (Darstellung mit gleitendendem Mittelwert)
+  geom_bar(data = mannheim.mobility.long, aes(x=date, y=rollmean(value, 7, na.pad=TRUE), fill=variable), stat="identity") +
+  # Verteilung der Kurven auf getrennte Plots
+  facet_grid(variable ~ ., scales="free_y")
+```
+
+
 ## Inzidenz-, Maßnahmen & Mobilitätsdaten gemeinsam plotten
 
 ```{r}
@@ -145,10 +157,10 @@ head(mannheim.mobility.long)
 mannheim.all.long <- bind_rows(mannheim.incidence.long, germany.response.long, mannheim.mobility.long)
 
 # Reihenfolge der Plots definieren
-mannheim.all.long$variable <- factor(mannheim.all.long$variable, levels = c("incidence", "walking", "transit", "driving", "C1_School closing", "C4_Restrictions on gatherings", "C6_Stay at home requirements"))
+mannheim.all.long$variable <- factor(mannheim.all.long$variable, levels = c("incidence", "walking", "transit", "driving", "C1M_School closing", "C4M_Restrictions on gatherings", "C6M_Stay at home requirements"))
 
 # Daten in gemeinsamem Plot darstellen
-options(repr.plot.width = 7, repr.plot.height = 5)
+options(repr.plot.width = 10, repr.plot.height = 7)
 plot <- ggplot(data = mannheim.all.long) +
   # Inzidenz- & Mobility-Plots (Darstellung mit gleitendendem Mittelwert)
   geom_bar(data = mannheim.all.long %>% filter(category %in% c("incidence", "mobility")), aes(x=date, y=rollmean(value, 7, na.pad=TRUE), fill=variable), stat="identity") +
@@ -166,7 +178,7 @@ gt = ggplot_gtable(ggplot_build(plot))
 gt$heights[7]  = 0.5*gt$heights[7]
 gt$heights[9]  = 0.5*gt$heights[9]
 gt$heights[11] = 0.5*gt$heights[11]
-gt$heights[19] = 5  *gt$heights[19]
+gt$heights[19] = 2  *gt$heights[19]
 grid.draw(gt)
 ```
 
