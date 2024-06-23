@@ -16,9 +16,9 @@ lapply(packages, require, character.only = TRUE)
 ## Bevölkerungsbestand vom Portal einlesen
 
 ```{r}
-mannheim.population.raw <- read_delim("https://mannheim.opendatasoft.com/explore/dataset/bevolkerungsbestand-in-mannheim-2009-2022/download/?format=csv&timezone=Europe/Berlin&lang=de&use_labels_for_header=true&csv_separator=%3B",
+mannheim.population.raw <- read_delim("https://mannheim.opendatasoft.com/explore/dataset/bevolkerungsbestand-in-mannheim-2009-2023/download/?format=csv&timezone=Europe/Berlin&lang=de&use_labels_for_header=true&csv_separator=%3B",
                                       col_names =    c("id", "jahr", "stadtteil_id", "stadtteil_name", "n_gesamt", "n_weiblich", "n_ohne_migration", "n_mit_migration", "n_auslaender"),
-                                      col_types = cols("i",  "i",    "c",            "c",              "i",        "i",          "i",                "i",               "i"),
+                                      col_types = cols("i",  "i",    "c",            "c",              "d",        "d",          "d",                "d",               "d"),
                                       skip = 1, delim = ";")
 head(mannheim.population.raw)
 ```
@@ -70,4 +70,13 @@ ggplot(data = mannheim.population.long %>% filter(variable %in% c("n_mit_migrati
     theme(axis.text.x = element_text(angle = 90)) +
     facet_wrap(~stadtteil_name)
 ```
+## Migrationsanteil vs. Zeit und Stadt mit absoluten Zahlen
 
+```{r}
+options(repr.plot.width = 15, repr.plot.height = 10)
+ggplot(data = mannheim.population.long %>% filter(variable %in% c("n_mit_migration", "n_ohne_migration")) %>% group_by(jahr, stadtteil_name, variable) %>% summarize(n = sum(n), .groups="keep"),
+       aes(x=jahr, y=n, fill=variable)) +
+    geom_bar(stat = "identity") +
+    theme(axis.text.x = element_text(angle = 90)) +
+    facet_wrap(~stadtteil_name)
+```

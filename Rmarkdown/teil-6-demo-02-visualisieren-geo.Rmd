@@ -13,7 +13,7 @@ output: html_document
 # Mit der folgenden Zeile können in Google Colab bei Bedarf Systembibliotheken installiert werden, die für das "sf"-Package notwendig sind
 #system('sudo apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev', intern=TRUE)
 
-packages <- c("readr", "dplyr", "tidyr", "leaflet", "tidygeocoder", "sf", "ggmap")
+packages <- c("readr", "dplyr", "tidyr", "leaflet", "tidygeocoder", "sf")
 install.packages(setdiff(packages, rownames(installed.packages())))
 lapply(packages, require, character.only = TRUE)
 
@@ -42,7 +42,7 @@ Um die Hintergrundkarte vorzugeben, wird *addTiles()* ersetzt durch *addProvider
 ```{r}
 leafletmap <- leaflet() %>%
     setView(13.3897338, 52.518763, zoom=15) %>%
-    addProviderTiles(providers$Stamen.Watercolor)
+    addProviderTiles(providers$OpenTopo)
 leafletmap
 ```
 
@@ -128,19 +128,18 @@ Die Geodaten für die Übung werden von https://gadm.org/ als Geopackages bezoge
 
 ```{r}
 # Shapes der Verwaltungsbezirke von https://gadm.org/ herunterladen & extrahieren, sofern sie nicht schon vorliegen
-if (!file.exists("gadm36_DEU.gpkg")) {
-    download.file("https://biogeo.ucdavis.edu/data/gadm3.6/gpkg/gadm36_DEU_gpkg.zip", "gadm36_DEU_gpkg.zip")
-    unzip("gadm36_DEU_gpkg.zip", "gadm36_DEU.gpkg", junkpaths = TRUE)
+if (!file.exists("gadm41_DEU.gpkg")) {
+    download.file("https://geodata.ucdavis.edu/gadm/gadm4.1/gpkg/gadm41_DEU.gpkg", "gadm41_DEU.gpkg")
 }
 
 # Shapes der Land-/Stadtkreise laden
-shapes.landkreise <- st_read("gadm36_DEU.gpkg", layer="gadm36_DEU_2")
+shapes.landkreise <- st_read("gadm41_DEU.gpkg", layer="ADM_ADM_2")
 
 # Polygone ausgeben (ohne Hintergrundkarte)
-leaflet(data = shapes.landkreise) %>% 
-    addPolygons(color = "black", 
-                weight = 0.5, 
-                opacity = 1, 
+leaflet(data = shapes.landkreise) %>%
+    addPolygons(color = "black",
+                weight = 0.5,
+                opacity = 1,
                 label = ~NAME_2)
 ```
 
@@ -188,51 +187,3 @@ leaflet(data = germany.incidence.map) %>%
     addLegend(pal = pal, values = ~fallzahl_pro_100k, title = "Fallzahl/100.000",
               position = "bottomright")
 ```
-
-# Geovisualisierung mit ggmap
-
-Im folgenden Teil der Demo werden die gleichen Schritte mit ggmap als statische Karten wiederholt. Dieser Teil funktioniert auch auf Google Colab.
-
-## Basiskarte mit ggmap darstellen
-
-Basiskarten können bei ggmap mit den *get_ANBIETERmap()*-Funktionen geladen werden. Es gibt allerdings mehrere Einschränkungen:
-* die Funktion zum Laden von OpenStreetMap-Hintergrundkarten ist seit längerem deaktiviert, da sie auf ein dafür seitens OSM nicht vorgesehenes API zugreift und dort gesperrt wurde; es ist nicht erkennbar, dass an einer Lösung gearbeitet wird
-* die Funktion zum Laden von GoogleMaps-Basiskarten erfordert die vorherige Anlage eines API-Keys bei Google; es gibt ein Rate-Limit und Maximalzahlen von Karten-(Tiles), die kostenfrei abgerufen werden können
-
-```{r}
-#boundingbox <- c(-0.14185925, 51.5108615, -0.13114775, 51.5168285)
-boundingbox <- c(4.3451573, 47.2942196, 15.5267352, 54.776929)
-map.germany <- get_stamenmap(bbox = boundingbox, maptype="terrain", crop=TRUE, zoom = 7)
-options(repr.plot.width = 5, repr.plot.height = 5)
-ggmap(map.germany)
-```
-
-## Manuellen Marker auf der Karte eintragen
-
-Marker und Texte können mit den normalen geoms aus ggplot2 ergänzt werden. Koordinaten können dabei sowohl einzeln explizit als auch über Spalten eines Tibble angegeben werden.
-
-```{r}
-ggmap(map.germany) +
-    geom_point(aes(x=13.39033, y=52.5186)) +
-    geom_text(aes(x=13.39033, y=52.786, label="TMF"))
-```
-
-## Marker aus Datensatz einfügen
-
-```{r}
-# Boundingbox aus Datensatz generieren
-boundingbox <- make_bbox(data = mannheim.wifi.raw, lon = lon, lat = lat, f = 0.05)
-map.mannheim <- get_stamenmap(bbox = boundingbox, maptype="watercolor", crop=TRUE, zoom = 13)
-options(repr.plot.width = 5, repr.plot.height = 5)
-ggmap(map.mannheim) +
-    geom_point(data = mannheim.wifi.raw, aes(x=lon, y=lat))
-```
-
-## Regionen mit Choroplethen in ggmap darstellen
-
-```{r}
-ggplot() +
-    geom_sf(data = germany.incidence.map, aes(fill=fallzahl_pro_100k), size=0.001) +
-    scale_fill_distiller(palette="Spectral", name="Fallzahl pro 100.000", na.value='#bbbbbb')
-```
-

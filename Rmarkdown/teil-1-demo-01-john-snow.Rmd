@@ -8,7 +8,7 @@ output: html_document
 ## Bibliotheken & Konfiguration
 
 ```{r}
-packages <- c("leaflet", "ggmap", "readr", "tidyr", "ggplot2")
+packages <- c("leaflet", "readr", "tidyr", "ggplot2")
 install.packages(setdiff(packages, rownames(installed.packages())))
 lapply(packages, require, character.only = TRUE)
 
@@ -34,17 +34,9 @@ ggplot(snow.dates.long) +
     geom_area(aes(x=date, y=n, fill=variable), alpha=0.5, position="identity") 
 ```
 
-## Karte von London laden
+## Geovisualisierung
 
-```{r}
-# bbox <- make_bbox(lon = snow.deaths.raw$lon, lat = snow.deaths.raw$lat, f = 0.25)
-boundingbox <- c(-0.14185925, 51.5108615, -0.13114775, 51.5168285)
-basemap <- get_stamenmap(bbox = boundingbox, center = c(lon = -0.136722, lat = 51.513578), maptype="toner-lite", crop=TRUE, zoom = 16)
-options(repr.plot.width = 10, repr.plot.height = 10)
-ggmap(basemap)
-```
-
-## Koordinaten der Todesfälle laden
+### Koordinaten der Todesfälle laden
 
 ```{r}
 snow.deaths.raw <- read_csv(paste(base_url, "cholera_deaths.csv", sep=""), 
@@ -54,16 +46,23 @@ snow.deaths.raw <- read_csv(paste(base_url, "cholera_deaths.csv", sep=""),
 head(snow.deaths.raw)
 ```
 
-## Todesfälle auf der Karte anzeigen
+### Todesfälle auf der Karte anzeigen
 
 ```{r}
-map <- ggmap(basemap) + 
-    geom_point(data = snow.deaths.raw, aes(x = lon, y = lat, size=deaths), color="blue", alpha=0.5)
-options(repr.plot.width = 10, repr.plot.height = 10)
-map
+leafletmap <- leaflet() %>%
+    setView(-0.136722, 51.513578, zoom=16) %>%
+    addProviderTiles(providers$OpenStreetMap.DE) %>%
+    addCircleMarkers(
+        data = snow.deaths.raw, ~lon, ~lat,
+        radius = ~deaths * 2,
+        color = "red",
+        stroke = FALSE,
+        fillOpacity = 0.5
+    )
+leafletmap
 ```
 
-## Koordinaten der Wasserpumpen laden
+### Koordinaten der Wasserpumpen laden
 
 ```{r}
 snow.pumps.raw <- read_csv(paste(base_url, "johnsnow_pumps.csv", sep=""), 
@@ -76,30 +75,10 @@ head(snow.pumps.raw)
 ## Wasserpumpen auf der Karte anzeigen
 
 ```{r}
-map <- map + 
-    geom_point(data = snow.pumps.raw, aes(x = lon, y = lat, size=5), color="red", alpha=0.75)
-options(repr.plot.width = 10, repr.plot.height = 10)
-map
-```
+# Wasserpumpen als Marker auf der Karte ergänzen
+leafletmap <- leafletmap %>%
+  addMarkers(data = snow.pumps.raw, ~lon, ~lat)
 
-## Interaktive Karte mit Leaflet
-
-### Hinweis: kann in Google Colab leider nicht angezeigt werden
-
-```{r}
-leafletmap <- leaflet() %>%
-    setView(-0.136722, 51.513578, zoom=16) %>%
-    addProviderTiles(providers$Stamen.TonerLite) %>% 
-    addCircleMarkers(
-        data = snow.deaths.raw, ~lon, ~lat,
-        radius = ~deaths * 2,
-        color = "red",
-        stroke = FALSE, 
-        fillOpacity = 0.5
-    ) %>% 
-    addMarkers(
-        data = snow.pumps.raw, ~lon, ~lat,
-    )
+# Karte ausgeben
 leafletmap
 ```
-
